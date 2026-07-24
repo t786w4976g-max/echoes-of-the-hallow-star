@@ -76,3 +76,11 @@ html,body{
   padding:14px 36px;border:1px solid var(--gold);background:#e1b35f14;color:#fff;
   font:18px Georgia,serif;letter-spacing:.14em;text-transform:uppercase
 }
+
+#controller-status{
+  position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 117px);transform:translateX(-50%);
+  padding:5px 10px;border-radius:15px;background:rgba(8,12,22,.66);border:1px solid #ffffff22;
+  color:#aab3c4;font:9px Arial,sans-serif;letter-spacing:.14em;text-transform:uppercase;opacity:0;transition:opacity .25s
+}
+#controller-status.show{opacity:1}
+#attack.active,#roll.active{transform:scale(.92);background:#7b5b2dcc}

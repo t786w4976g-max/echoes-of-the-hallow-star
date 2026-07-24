@@ -1,15 +1,16 @@
-# Echoes of the Hollow Star
+# Echoes of the Hollow Star — Build 3
 
 Browser-based Babylon.js action-adventure prototype.
 
-## Current build
+## Build 3 changes
 
-- Ashbrook village environment
-- Mobile touch controls
-- Third-person camera
-- Guild Master Rowan dialogue
-- Quest objective compass
-- Hollow Beacon sequence
-- Star System introduction
+- Kota redesigned to match the approved character concept
+- Brown tousled hair, green tunic, travel cloak, star pendant, satchel and leather gear
+- Starting sword removed
+- Starting shield removed
+- Default attack is Punch
+- Touch and keyboard controls retained
+- Gamepad support added through the browser Gamepad API
+- Left stick movement, right stick camera, face button Punch, second face button Roll
 
 No personal data is stored or collected.

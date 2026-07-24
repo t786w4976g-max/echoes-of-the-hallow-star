@@ -66,7 +66,12 @@
     dark: pbr("dark", "#151925", 0.75),
     gold: pbr("gold", "#a77a35", 0.45),
     glow: pbr("glow", "#4e91c6", 0.35, "#2b82d1"),
-    npc: pbr("npc", "#6c3f38", 0.85)
+    npc: pbr("npc", "#6c3f38", 0.85),
+    leather: pbr("leather", "#4a2f23", 0.88),
+    cloakOuter: pbr("cloakOuter", "#514838", 0.92),
+    cloakInner: pbr("cloakInner", "#151a36", 0.72, "#080d22"),
+    hairBrown: pbr("hairBrown", "#4a2b1d", 0.86),
+    boot: pbr("boot", "#3b271e", 0.92)
   };
 
   function terrainHeight(x, z) {
@@ -236,30 +241,153 @@
     return root;
   }
 
-  const player = createHumanoid("Kota", mats.tunic, 0, 13);
+  function createKota(x, z) {
+    const root = new BABYLON.TransformNode("Kota", scene);
+    root.position.set(x, terrainHeight(x, z), z);
 
-  const cloak = BABYLON.MeshBuilder.CreateCylinder("Kota-cloak", {
-    height: 1.55,
-    diameterTop: 0.65,
-    diameterBottom: 1.05,
-    tessellation: 10,
-    arc: 0.62
-  }, scene);
-  cloak.parent = player;
-  cloak.position.set(0, 1.35, 0.25);
-  cloak.rotation.y = Math.PI / 2;
-  cloak.material = mats.dark;
+    // Torso and tunic
+    const torso = BABYLON.MeshBuilder.CreateCapsule("Kota-torso", {
+      height: 1.55,
+      radius: 0.42,
+      tessellation: 14
+    }, scene);
+    torso.parent = root;
+    torso.position.y = 1.45;
+    torso.scaling.z = 0.8;
+    torso.material = mats.tunic;
 
-  const sword = BABYLON.MeshBuilder.CreateBox("Kota-sword", {
-    width: 0.09,
-    height: 1.35,
-    depth: 0.04
-  }, scene);
-  sword.parent = player;
-  sword.position.set(0.58, 1.3, 0.1);
-  sword.rotation.z = -0.18;
-  sword.material = mats.gold;
+    // Belt
+    const belt = BABYLON.MeshBuilder.CreateTorus("Kota-belt", {
+      diameter: 0.86,
+      thickness: 0.10,
+      tessellation: 20
+    }, scene);
+    belt.parent = root;
+    belt.position.y = 1.18;
+    belt.rotation.x = Math.PI / 2;
+    belt.material = mats.leather;
 
+    // Head
+    const head = BABYLON.MeshBuilder.CreateSphere("Kota-head", { diameter: 0.72, segments: 16 }, scene);
+    head.parent = root;
+    head.position.y = 2.45;
+    head.scaling.z = 0.92;
+    head.material = mats.skin;
+
+    // Tousled hair: cap plus clustered spikes
+    const hairCap = BABYLON.MeshBuilder.CreateSphere("Kota-hair-cap", { diameter: 0.78, segments: 14, slice: 0.62 }, scene);
+    hairCap.parent = root;
+    hairCap.position.set(0, 2.65, -0.02);
+    hairCap.rotation.x = Math.PI;
+    hairCap.material = mats.hairBrown;
+
+    for (let i = 0; i < 9; i++) {
+      const spike = BABYLON.MeshBuilder.CreateCylinder("Kota-hair-spike", {
+        height: 0.34 + (i % 3) * 0.035,
+        diameterTop: 0,
+        diameterBottom: 0.16,
+        tessellation: 7
+      }, scene);
+      spike.parent = root;
+      const a = (i / 9) * Math.PI * 2;
+      spike.position.set(Math.cos(a) * 0.25, 2.82 + Math.sin(i * 2.2) * 0.05, Math.sin(a) * 0.22);
+      spike.rotation.z = Math.cos(a) * 0.55;
+      spike.rotation.x = Math.sin(a) * 0.55;
+      spike.material = mats.hairBrown;
+      shadows.addShadowCaster(spike);
+    }
+
+    // Arms and fists. These nodes are animated for the punch.
+    const leftShoulder = new BABYLON.TransformNode("Kota-left-shoulder", scene);
+    leftShoulder.parent = root;
+    leftShoulder.position.set(-0.48, 1.82, 0);
+    const rightShoulder = new BABYLON.TransformNode("Kota-right-shoulder", scene);
+    rightShoulder.parent = root;
+    rightShoulder.position.set(0.48, 1.82, 0);
+
+    function makeArm(side, shoulder) {
+      const upper = BABYLON.MeshBuilder.CreateCapsule(`Kota-${side}-upper-arm`, { height: 0.82, radius: 0.15, tessellation: 10 }, scene);
+      upper.parent = shoulder;
+      upper.position.y = -0.34;
+      upper.rotation.z = side === "left" ? -0.08 : 0.08;
+      upper.material = mats.tunic;
+
+      const forearm = BABYLON.MeshBuilder.CreateCapsule(`Kota-${side}-forearm`, { height: 0.72, radius: 0.14, tessellation: 10 }, scene);
+      forearm.parent = shoulder;
+      forearm.position.y = -0.92;
+      forearm.material = mats.leather;
+
+      const fist = BABYLON.MeshBuilder.CreateSphere(`Kota-${side}-fist`, { diameter: 0.31, segments: 10 }, scene);
+      fist.parent = shoulder;
+      fist.position.y = -1.32;
+      fist.scaling.z = 0.85;
+      fist.material = mats.skin;
+      [upper, forearm, fist].forEach(m => shadows.addShadowCaster(m));
+      return { shoulder, upper, forearm, fist };
+    }
+
+    const leftArm = makeArm("left", leftShoulder);
+    const rightArm = makeArm("right", rightShoulder);
+
+    // Legs and boots
+    for (const side of [-1, 1]) {
+      const leg = BABYLON.MeshBuilder.CreateCapsule("Kota-leg", { height: 1.2, radius: 0.18, tessellation: 10 }, scene);
+      leg.parent = root;
+      leg.position.set(side * 0.22, 0.55, 0);
+      leg.material = mats.dark;
+
+      const boot = BABYLON.MeshBuilder.CreateBox("Kota-boot", { width: 0.34, height: 0.52, depth: 0.48 }, scene);
+      boot.parent = root;
+      boot.position.set(side * 0.22, 0.20, -0.08);
+      boot.material = mats.boot;
+      [leg, boot].forEach(m => shadows.addShadowCaster(m));
+    }
+
+    // Cloak: outer shoulders and visible starry inner panel
+    const cloakOuter = BABYLON.MeshBuilder.CreateCylinder("Kota-cloak-outer", {
+      height: 1.8,
+      diameterTop: 0.78,
+      diameterBottom: 1.28,
+      tessellation: 14,
+      arc: 0.62,
+      enclose: true
+    }, scene);
+    cloakOuter.parent = root;
+    cloakOuter.position.set(0, 1.58, 0.27);
+    cloakOuter.rotation.y = Math.PI / 2;
+    cloakOuter.material = mats.cloakOuter;
+
+    const cloakInner = BABYLON.MeshBuilder.CreatePlane("Kota-cloak-inner", { width: 1.05, height: 1.55 }, scene);
+    cloakInner.parent = root;
+    cloakInner.position.set(0, 1.48, 0.63);
+    cloakInner.rotation.y = Math.PI;
+    cloakInner.material = mats.cloakInner;
+
+    // Star pendant
+    const pendant = BABYLON.MeshBuilder.CreatePolyhedron("Kota-star-pendant", { type: 2, size: 0.17 }, scene);
+    pendant.parent = root;
+    pendant.position.set(0, 1.95, -0.43);
+    pendant.material = mats.glow;
+
+    // Cross-body strap and satchel
+    const strap = BABYLON.MeshBuilder.CreateBox("Kota-strap", { width: 0.09, height: 1.35, depth: 0.05 }, scene);
+    strap.parent = root;
+    strap.position.set(0, 1.55, -0.42);
+    strap.rotation.z = -0.52;
+    strap.material = mats.leather;
+
+    const satchel = BABYLON.MeshBuilder.CreateBox("Kota-satchel", { width: 0.58, height: 0.45, depth: 0.22 }, scene);
+    satchel.parent = root;
+    satchel.position.set(0.48, 1.08, 0.22);
+    satchel.material = mats.leather;
+
+    [torso, belt, head, hairCap, cloakOuter, cloakInner, pendant, strap, satchel].forEach(m => shadows.addShadowCaster(m));
+
+    return { root, leftArm, rightArm, cloakOuter, cloakInner, pendant };
+  }
+
+  const kota = createKota(0, 13);
+  const player = kota.root;
   const rowan = createHumanoid("Guild Master Rowan", mats.npc, 0, -10.2);
   rowan.rotation.y = Math.PI;
 
@@ -272,6 +400,8 @@
   let rolling = false;
   let moveX = 0;
   let moveY = 0;
+  let gamepadAttackHeld = false;
+  let gamepadRollHeld = false;
 
   const input = { keys: {} };
   addEventListener("keydown", e => input.keys[e.key.toLowerCase()] = true);
@@ -326,29 +456,48 @@
     setTimeout(() => element.classList.remove("show"), 1400);
   }
 
-  function strike() {
+  function punch() {
     if (attacking || dialogueOpen) return;
     attacking = true;
+
+    const button = document.getElementById("attack");
+    button.classList.add("active");
     const start = performance.now();
+    const duration = 300;
+
     const timer = setInterval(() => {
-      const progress = (performance.now() - start) / 260;
-      sword.rotation.z = -0.18 + Math.sin(Math.min(progress, 1) * Math.PI) * 2.15;
+      const progress = Math.min(1, (performance.now() - start) / duration);
+      const thrust = Math.sin(progress * Math.PI);
+      const windup = Math.sin(Math.min(progress * 1.8, 1) * Math.PI) * 0.18;
+
+      kota.rightArm.shoulder.rotation.x = -thrust * 1.55;
+      kota.rightArm.shoulder.rotation.z = -windup;
+      kota.rightArm.shoulder.position.z = -thrust * 0.38;
+      kota.leftArm.shoulder.rotation.x = thrust * 0.18;
+      player.rotation.y += thrust * 0.002;
+
       if (progress >= 1) {
         clearInterval(timer);
-        sword.rotation.z = -0.18;
+        kota.rightArm.shoulder.rotation.set(0, 0, 0);
+        kota.rightArm.shoulder.position.set(0.48, 1.82, 0);
+        kota.leftArm.shoulder.rotation.set(0, 0, 0);
         attacking = false;
+        button.classList.remove("active");
       }
     }, 16);
-    navigator.vibrate?.(15);
+
+    navigator.vibrate?.(18);
   }
 
   function roll() {
     if (rolling || dialogueOpen) return;
     rolling = true;
-    setTimeout(() => rolling = false, 430);
+    const button = document.getElementById("roll");
+    button.classList.add("active");
+    setTimeout(() => { rolling = false; button.classList.remove("active"); }, 430);
   }
 
-  document.getElementById("attack").addEventListener("pointerdown", strike);
+  document.getElementById("attack").addEventListener("pointerdown", punch);
   document.getElementById("roll").addEventListener("pointerdown", roll);
 
   const rowanDialogue = [
@@ -454,12 +603,43 @@
     return new BABYLON.Vector3(0, terrainHeight(0, -15), -15);
   }
 
+  function readGamepad() {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    const pad = [...pads].find(Boolean);
+    const status = document.getElementById("controller-status");
+
+    if (!pad) {
+      status.classList.remove("show");
+      return { x: 0, y: 0, cameraX: 0, cameraY: 0 };
+    }
+
+    status.classList.add("show");
+    const deadzone = value => Math.abs(value) < 0.16 ? 0 : value;
+    const attackPressed = !!pad.buttons[0]?.pressed;
+    const rollPressed = !!pad.buttons[1]?.pressed;
+
+    if (attackPressed && !gamepadAttackHeld) punch();
+    if (rollPressed && !gamepadRollHeld) roll();
+    gamepadAttackHeld = attackPressed;
+    gamepadRollHeld = rollPressed;
+
+    return {
+      x: deadzone(pad.axes[0] || 0),
+      y: deadzone(pad.axes[1] || 0),
+      cameraX: deadzone(pad.axes[2] || 0),
+      cameraY: deadzone(pad.axes[3] || 0)
+    };
+  }
+
   scene.onBeforeRenderObservable.add(() => {
     if (!gameStarted || dialogueOpen) return;
 
     const dt = Math.min(0.033, engine.getDeltaTime() / 1000);
-    let x = moveX + (input.keys["d"] ? 1 : 0) - (input.keys["a"] ? 1 : 0);
-    let y = moveY + (input.keys["s"] ? 1 : 0) - (input.keys["w"] ? 1 : 0);
+    const gamepad = readGamepad();
+    let x = moveX + gamepad.x + (input.keys["d"] ? 1 : 0) - (input.keys["a"] ? 1 : 0);
+    let y = moveY + gamepad.y + (input.keys["s"] ? 1 : 0) - (input.keys["w"] ? 1 : 0);
+    camera.alpha += gamepad.cameraX * dt * 2.2;
+    camera.beta = BABYLON.Scalar.Clamp(camera.beta + gamepad.cameraY * dt * 1.5, camera.lowerBetaLimit, camera.upperBetaLimit);
     const inputLength = Math.hypot(x, y);
 
     if (inputLength > 1) {
@@ -478,7 +658,19 @@
       player.position.addInPlace(direction.scale(speed * dt));
       player.rotation.y = Math.atan2(direction.x, direction.z);
       player.position.y = terrainHeight(player.position.x, player.position.z);
+
+      if (!attacking) {
+        const swing = Math.sin(performance.now() * 0.009) * Math.min(inputLength, 1) * 0.32;
+        kota.leftArm.shoulder.rotation.x = swing;
+        kota.rightArm.shoulder.rotation.x = -swing;
+      }
+    } else if (!attacking) {
+      kota.leftArm.shoulder.rotation.x *= 0.82;
+      kota.rightArm.shoulder.rotation.x *= 0.82;
     }
+
+    kota.cloakOuter.rotation.z = Math.sin(performance.now() * 0.0022) * 0.025;
+    kota.pendant.rotation.y += dt * 0.8;
 
     player.position.x = BABYLON.Scalar.Clamp(player.position.x, -52, 52);
     player.position.z = BABYLON.Scalar.Clamp(player.position.z, -52, 52);
