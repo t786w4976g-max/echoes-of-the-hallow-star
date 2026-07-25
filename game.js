@@ -86,6 +86,16 @@
   const onRoad=(x,z)=>roads.some(r=>Math.abs(x-r.x)<r.w/2&&Math.abs(z-r.z)<r.d/2);
   const village=(x,z)=>Math.abs(x)<19&&z>-25&&z<21;
 
+  // The road is rendered above the terrain. Keep Kota's feet on that visual surface
+  // instead of letting the terrain height place him through the cobbles.
+  function surfaceHeight(x,z){
+    const base=h(x,z);
+    const onMainCobble=Math.abs(x)<2.9&&z>-14.7&&z<15.5;
+    const onGuildApron=Math.abs(x-.2)<4.7&&z>-18.3&&z<-10.7;
+    const onEastCobble=Math.abs(x-15)<9.7&&Math.abs(z+8)<2.0;
+    return base + ((onMainCobble || onGuildApron || onEastCobble) ? 0.16 : 0);
+  }
+
   function patch(x,z,w,d,m,y=.05){const p=BABYLON.MeshBuilder.CreateBox('patch',{width:w,depth:d,height:.08},scene);place(p,x,z,y);p.material=m;p.receiveShadows=true;return p;}
   patch(0,1,6.6,44.5,M.dirt);patch(15,-8,32.5,5.3,M.dirt);patch(-10,-5,5,19.5,M.dirt);
 
@@ -163,7 +173,7 @@
   }
 
   const player = new BABYLON.TransformNode('PlayerRoot', scene);
-  player.position.set(0, h(0, 15), 15);
+  player.position.set(0, surfaceHeight(0, 15), 15);
 
   // Imported character stays under its original Armature hierarchy.
   // Only the Armature root is attached to PlayerRoot.
@@ -202,7 +212,8 @@
       kotaArmature.parent = player;
       kotaArmature.position.set(0, 0, 0);
       kotaArmature.rotationQuaternion = null;
-      kotaArmature.rotation.set(0, Math.PI, 0);
+      // Meshy faces the same forward direction as PlayerRoot in this export.
+      kotaArmature.rotation.set(0, 0, 0);
 
       container.meshes.forEach(mesh => {
         if (mesh.getTotalVertices && mesh.getTotalVertices() > 0) {
@@ -275,7 +286,11 @@
     playKotaAnimation('punch',false,1.12);
     const g=kotaAnims.punch;
     const duration=g&&g.to>g.from?Math.max(260,((g.to-g.from)/30)*1000/1.12):520;
-    setTimeout(()=>{punching=false;playKotaAnimation('idle',true);},duration);
+    setTimeout(()=>{
+      punching=false;
+      locomotionState='';
+      updateLocomotionAnimation(Math.hypot(moveX,moveY));
+    },duration);
   }
   function roll(){if(rolling||dialogueOpen)return;rolling=true;flash('roll');setTimeout(()=>rolling=false,420)}
   $("attack").addEventListener('pointerdown',punch);$("roll").addEventListener('pointerdown',roll);
@@ -294,6 +309,31 @@
   $("begin").addEventListener('click',()=>{$("title-screen").style.display='none';gameStarted=true;toast('Welcome to Ashbrook');canvas.focus()});
 
   let lastA=false,lastB=false,padShown=false;
+  let lastMoveTime=0;
+  let smoothedMove=0;
+  let locomotionState='idle';
+  const IDLE_DELAY_MS=260;
+
+  function updateLocomotionAnimation(rawStrength){
+    if(!kotaReady||punching)return;
+    const now=performance.now();
+    smoothedMove=BABYLON.Scalar.Lerp(smoothedMove,rawStrength,0.28);
+    if(rawStrength>0.08)lastMoveTime=now;
+
+    let next=locomotionState;
+    if(smoothedMove>0.68){
+      next='run';
+    }else if(smoothedMove>0.06 || now-lastMoveTime<IDLE_DELAY_MS){
+      next='walk';
+    }else{
+      next='idle';
+    }
+
+    if(next!==locomotionState){
+      locomotionState=next;
+      playKotaAnimation(next,true,next==='run'?1.05:1);
+    }
+  }
   scene.onBeforeRenderObservable.add(()=>{
     const t=performance.now()*.001,dt=Math.min(.033,engine.getDeltaTime()/1000);
     sun.direction=new BABYLON.Vector3(-.6+Math.sin(t*.04)*.05,-1,.28);
@@ -302,8 +342,8 @@
     if(pad){if(!padShown){$("controller-status").classList.add('show');padShown=true}if(Math.abs(pad.axes[0])>.15||Math.abs(pad.axes[1])>.15){moveX=pad.axes[0];moveY=pad.axes[1]}else if(!sid){moveX=moveY=0}if(Math.abs(pad.axes[2])>.18)camera.alpha+=pad.axes[2]*.045;if(Math.abs(pad.axes[3])>.18)camera.beta=BABYLON.Scalar.Clamp(camera.beta+pad.axes[3]*.028,camera.lowerBetaLimit,camera.upperBetaLimit);const a=pad.buttons[0]?.pressed,b=pad.buttons[1]?.pressed;if(a&&!lastA)punch();if(b&&!lastB)roll();lastA=a;lastB=b}
     if(!gameStarted||dialogueOpen)return;
     let x=moveX+(input.keys.d?1:0)-(input.keys.a?1:0),y=moveY+(input.keys.s?1:0)-(input.keys.w?1:0),l=Math.hypot(x,y);if(l>1){x/=l;y/=l}
-    if(l>.08){const f=camera.getForwardRay().direction;f.y=0;f.normalize();const r=BABYLON.Vector3.Cross(BABYLON.Axis.Y,f).normalize();const d=r.scale(x).add(f.scale(-y)).normalize(),sp=rolling?8.8:4.6;player.position.addInPlace(d.scale(sp*dt));player.rotation.y=Math.atan2(d.x,d.z);player.position.y=h(player.position.x,player.position.z)}
-    if(kotaReady&&!punching){if(l>.72)playKotaAnimation('run',true,1.05);else if(l>.08)playKotaAnimation('walk',true,1);else playKotaAnimation('idle',true,1);}
+    if(l>.08){const f=camera.getForwardRay().direction;f.y=0;f.normalize();const r=BABYLON.Vector3.Cross(BABYLON.Axis.Y,f).normalize();const d=r.scale(x).add(f.scale(-y)).normalize(),sp=rolling?8.8:4.6;player.position.addInPlace(d.scale(sp*dt));const targetYaw=Math.atan2(d.x,d.z);player.rotation.y=BABYLON.Scalar.LerpAngle(player.rotation.y,targetYaw,Math.min(1,dt*14));player.position.y=surfaceHeight(player.position.x,player.position.z)}
+    updateLocomotionAnimation(l);
     player.position.x=BABYLON.Scalar.Clamp(player.position.x,-58,58);player.position.z=BABYLON.Scalar.Clamp(player.position.z,-58,58);camera.target=BABYLON.Vector3.Lerp(camera.target,player.position.add(new BABYLON.Vector3(0,1.35,0)),.12);
     const target=objective(),d=target.subtract(player.position),dist=Math.round(Math.hypot(d.x,d.z));$("objective-distance").textContent=dist+' m';document.querySelector('#objective-marker .arrow').style.transform=`rotate(${Math.atan2(d.x,d.z)-camera.alpha-Math.PI/2}rad)`;
     const rd=BABYLON.Vector3.Distance(player.position,rowan.position),bd=BABYLON.Vector3.Distance(player.position,beaconRoot.position),nr=currentQuest==='rowan'&&rd<3.2,nb=currentQuest==='beacon'&&bd<4;const p=$("interaction-prompt");p.textContent=nr?'Talk to Rowan':nb?'Touch the Beacon':'';p.classList.toggle('show',nr||nb);if(nr&&rd<2.1)beginDialog(rowanLines);if(nb&&bd<2.8)beginDialog(beaconLines)
