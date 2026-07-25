@@ -142,10 +142,80 @@
     [f,b,roof,door,porch,ch,...posts].forEach(m=>shadows.addShadowCaster(m));
     return root;
   }
-  building('guild',0,-15,{w:6.2,d:5.4,h:3.55,guild:true});
-  building('west',-10.5,-5.5,{rot:.05});building('east',10.7,-3.8,{rot:-.08});
-  building('nw',-11.8,-17.7,{w:4,d:3.6,h:2.45,rot:-.03});building('ne',11.6,-18.4,{w:4,d:3.6,h:2.45,rot:.07});
-  building('sw',-8.5,13.5,{w:3.9,d:3.5,h:2.45,rot:.1});building('se',8.9,14.2,{w:3.9,d:3.5,h:2.45,rot:-.08});building('smithy',-2.8,10.1,{w:4.5,d:3.9,h:2.65,rot:-.04});
+  building('smithy',-2.8,10.1,{w:4.5,d:3.9,h:2.65,rot:-.04});
+
+  // Authored Adventure Guild hall.
+  async function loadGuildHall(){
+    try{
+      const result=await BABYLON.SceneLoader.ImportMeshAsync('', './', 'Guild.glb', scene, undefined, '.glb');
+      const pivot=new BABYLON.TransformNode('Adventure Guild',scene);
+      const scale=3.55;
+      // The source model is centered vertically; this offset places its lowest point on the terrain.
+      pivot.position.set(0,h(0,-15)+0.537*scale,-15);
+      pivot.scaling.setAll(scale);
+      pivot.rotation.y=0;
+      result.meshes.filter(mesh=>!mesh.parent).forEach(mesh=>mesh.parent=pivot);
+      result.meshes.forEach(mesh=>{
+        if(mesh===pivot)return;
+        mesh.receiveShadows=true;
+        mesh.checkCollisions=true;
+        shadows.addShadowCaster(mesh);
+      });
+      console.log('Guild hall loaded');
+    }catch(error){
+      console.error('Guild.glb failed to load',error);
+      const status=$('model-status');
+      status.classList.add('show');
+      status.textContent='Guild error: '+(error?.message||String(error));
+      setTimeout(()=>status.classList.remove('show'),5000);
+    }
+  }
+  loadGuildHall();
+
+  // Authored villager-home GLB. Each placement shares the source geometry/materials.
+  const homePlacements = [
+    {name:'west-home', x:-10.5, z:-5.5, rot:0.05, scale:2.35},
+    {name:'east-home', x:10.7, z:-3.8, rot:-0.08, scale:2.45},
+    {name:'northwest-home', x:-11.8, z:-17.7, rot:-0.03, scale:2.15},
+    {name:'northeast-home', x:11.6, z:-18.4, rot:0.07, scale:2.15},
+    {name:'southwest-home', x:-8.5, z:13.5, rot:0.10, scale:2.10},
+    {name:'southeast-home', x:8.9, z:14.2, rot:-0.08, scale:2.10}
+  ];
+
+  async function loadVillagerHomes() {
+    try {
+      const homes = await BABYLON.SceneLoader.LoadAssetContainerAsync('./', 'House.glb', scene, undefined, '.glb');
+      const sourceRoot = homes.rootNodes.find(node => node.name !== '__root__') || homes.rootNodes[0];
+      if (!sourceRoot) throw new Error('House.glb has no root node');
+
+      homePlacements.forEach((p, index) => {
+        const instance = homes.instantiateModelsToScene(name => `${p.name}-${name}`, false, {doNotInstantiate:false});
+        const roots = instance.rootNodes;
+        const root = roots.find(node => node.parent == null) || roots[0];
+        if (!root) return;
+        root.position.set(p.x, h(p.x, p.z), p.z);
+        root.rotationQuaternion = null;
+        root.rotation.y = p.rot;
+        root.scaling.setAll(p.scale);
+        root.getChildMeshes(false).forEach(mesh => {
+          mesh.receiveShadows = true;
+          mesh.checkCollisions = true;
+          shadows.addShadowCaster(mesh);
+        });
+      });
+
+      homes.removeAllFromScene();
+      homes.dispose();
+      console.log('Villager homes loaded:', homePlacements.length);
+    } catch (error) {
+      console.error('House.glb failed to load', error);
+      const status = $('model-status');
+      status.classList.add('show');
+      status.textContent = 'House error: ' + (error?.message || String(error));
+      setTimeout(() => status.classList.remove('show'), 5000);
+    }
+  }
+  loadVillagerHomes();
 
   function tree(x,z,v=0){
     const root=new BABYLON.TransformNode('tree',scene);root.position.set(x,h(x,z),z);root.rotation.y=Math.random()*Math.PI*2;
