@@ -169,7 +169,7 @@
   const kotaAnims={};
   const beginButton=$('begin');
   beginButton.disabled=true;beginButton.textContent='Loading Kota…';
-  BABYLON.SceneLoader.ImportMeshAsync('', './', 'Kota_Mobile_Merged.glb?v=7', scene).then(result=>{
+  BABYLON.SceneLoader.ImportMeshAsync('', './', 'Kota_Mobile_Merged.glb?v=7', scene, null, '.glb').then(result=>{
     // Keep the imported armature, skin, and mesh hierarchy intact.
     // Re-parent only top-level imported roots to the moving player visual root.
     const allImported = new Set([
@@ -184,6 +184,17 @@
         shadows.addShadowCaster(mesh);
         mesh.receiveShadows = true;
         mesh.alwaysSelectAsActiveMesh = true;
+      }
+      // The source GLB's material has no metallicFactor set, which glTF
+      // defaults to 1.0 (full metal) — that's why Kota rendered shiny/gray.
+      // It also reuses the albedo texture as a full-strength emissive map,
+      // which self-illuminates the model and washes out the scene's
+      // directional light and shadows. Correct both so Kota is lit like
+      // everything else in the scene.
+      if (mesh.material && mesh.material.getClassName && mesh.material.getClassName() === 'PBRMaterial') {
+        mesh.material.metallic = 0.05;
+        mesh.material.emissiveTexture = null;
+        mesh.material.emissiveColor = BABYLON.Color3.Black();
       }
     });
 
