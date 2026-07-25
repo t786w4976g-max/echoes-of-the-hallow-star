@@ -84,5 +84,3 @@ html,body{
 }
 #controller-status.show{opacity:1}
 #attack.active,#roll.active{transform:scale(.92);background:#7b5b2dcc}
-
-#build-status{position:fixed;left:10px;bottom:10px;z-index:100;padding:6px 9px;border-radius:6px;background:rgba(0,0,0,.72);color:#fff;font:10px Arial,sans-serif;letter-spacing:.08em;pointer-events:none}#model-status{position:fixed;inset:auto 12px 74px 12px;z-index:101;padding:12px;background:rgba(10,15,25,.92);border:1px solid rgba(225,179,95,.65);color:#fff;text-align:center;font:13px Arial,sans-serif;display:none}#model-status.show{display:block}
