@@ -1,3 +1,1 @@
-# Echoes of the Hollow Star
-
-Adds the authored Guild.glb as Ashbrook’s Adventure Guild hall. Permanent filenames are preserved.
+Integration fix: permanent filenames. Corrects Kota travel direction and grounds/retains authored House.glb and Guild.glb assets.

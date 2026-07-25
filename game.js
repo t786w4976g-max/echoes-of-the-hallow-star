@@ -144,24 +144,40 @@
   }
   building('smithy',-2.8,10.1,{w:4.5,d:3.9,h:2.65,rot:-.04});
 
+  function groundImportedRoot(root, meshes, x, z, scale, rotation) {
+    root.rotationQuaternion = null;
+    root.position.set(x, 0, z);
+    root.scaling.setAll(scale);
+    root.rotation.y = rotation;
+    root.computeWorldMatrix(true);
+    meshes.forEach(mesh => mesh.computeWorldMatrix(true));
+
+    let minY = Infinity;
+    meshes.forEach(mesh => {
+      if (!mesh.getBoundingInfo || !mesh.getTotalVertices || mesh.getTotalVertices() === 0) return;
+      const bounds = mesh.getBoundingInfo().boundingBox;
+      minY = Math.min(minY, bounds.minimumWorld.y);
+    });
+
+    root.position.y += surfaceHeight(x, z) - (Number.isFinite(minY) ? minY : 0);
+    root.computeWorldMatrix(true);
+  }
+
   // Authored Adventure Guild hall.
   async function loadGuildHall(){
     try{
       const result=await BABYLON.SceneLoader.ImportMeshAsync('', './', 'Guild.glb', scene, undefined, '.glb');
       const pivot=new BABYLON.TransformNode('Adventure Guild',scene);
-      const scale=3.55;
-      // The source model is centered vertically; this offset places its lowest point on the terrain.
-      pivot.position.set(0,h(0,-15)+0.537*scale,-15);
-      pivot.scaling.setAll(scale);
-      pivot.rotation.y=0;
-      result.meshes.filter(mesh=>!mesh.parent).forEach(mesh=>mesh.parent=pivot);
-      result.meshes.forEach(mesh=>{
-        if(mesh===pivot)return;
+      const roots=result.meshes.filter(mesh=>!mesh.parent);
+      roots.forEach(mesh=>mesh.parent=pivot);
+      const visibleMeshes=result.meshes.filter(mesh=>mesh.getTotalVertices && mesh.getTotalVertices()>0);
+      groundImportedRoot(pivot, visibleMeshes, 0, -15, 3.55, 0);
+      visibleMeshes.forEach(mesh=>{
         mesh.receiveShadows=true;
         mesh.checkCollisions=true;
         shadows.addShadowCaster(mesh);
       });
-      console.log('Guild hall loaded');
+      console.log('Guild hall loaded and grounded');
     }catch(error){
       console.error('Guild.glb failed to load',error);
       const status=$('model-status');
@@ -172,7 +188,7 @@
   }
   loadGuildHall();
 
-  // Authored villager-home GLB. Each placement shares the source geometry/materials.
+  // Authored villager-home GLB. One retained source container supplies every home.
   const homePlacements = [
     {name:'west-home', x:-10.5, z:-5.5, rot:0.05, scale:2.35},
     {name:'east-home', x:10.7, z:-3.8, rot:-0.08, scale:2.45},
@@ -181,32 +197,33 @@
     {name:'southwest-home', x:-8.5, z:13.5, rot:0.10, scale:2.10},
     {name:'southeast-home', x:8.9, z:14.2, rot:-0.08, scale:2.10}
   ];
+  let retainedHomeContainer = null;
 
   async function loadVillagerHomes() {
     try {
-      const homes = await BABYLON.SceneLoader.LoadAssetContainerAsync('./', 'House.glb', scene, undefined, '.glb');
-      const sourceRoot = homes.rootNodes.find(node => node.name !== '__root__') || homes.rootNodes[0];
-      if (!sourceRoot) throw new Error('House.glb has no root node');
+      retainedHomeContainer = await BABYLON.SceneLoader.LoadAssetContainerAsync('./', 'House.glb', scene, undefined, '.glb');
+      if (!retainedHomeContainer.rootNodes.length) throw new Error('House.glb has no root node');
 
-      homePlacements.forEach((p, index) => {
-        const instance = homes.instantiateModelsToScene(name => `${p.name}-${name}`, false, {doNotInstantiate:false});
-        const roots = instance.rootNodes;
-        const root = roots.find(node => node.parent == null) || roots[0];
-        if (!root) return;
-        root.position.set(p.x, h(p.x, p.z), p.z);
-        root.rotationQuaternion = null;
-        root.rotation.y = p.rot;
-        root.scaling.setAll(p.scale);
-        root.getChildMeshes(false).forEach(mesh => {
+      homePlacements.forEach(p => {
+        const instance = retainedHomeContainer.instantiateModelsToScene(
+          name => `${p.name}-${name}`,
+          false,
+          {doNotInstantiate:false}
+        );
+        const root = instance.rootNodes.find(node => !node.parent) || instance.rootNodes[0];
+        if (!root) throw new Error(`Could not create ${p.name}`);
+        const meshes = root.getChildMeshes(false).filter(mesh => mesh.getTotalVertices && mesh.getTotalVertices()>0);
+        if (root.getTotalVertices && root.getTotalVertices()>0) meshes.push(root);
+        groundImportedRoot(root, meshes, p.x, p.z, p.scale, p.rot);
+        meshes.forEach(mesh => {
           mesh.receiveShadows = true;
           mesh.checkCollisions = true;
           shadows.addShadowCaster(mesh);
         });
       });
 
-      homes.removeAllFromScene();
-      homes.dispose();
-      console.log('Villager homes loaded:', homePlacements.length);
+      // Keep the source container alive because instances share its geometry/materials.
+      console.log('Villager homes loaded and grounded:', homePlacements.length);
     } catch (error) {
       console.error('House.glb failed to load', error);
       const status = $('model-status');
@@ -423,7 +440,9 @@
       const r=BABYLON.Vector3.Cross(BABYLON.Axis.Y,f).normalize();
       const d=r.scale(x).add(f.scale(-y)).normalize(),sp=rolling?8.8:4.6;
       player.position.addInPlace(d.scale(sp*dt));
-      const targetYaw=Math.atan2(d.x,d.z);
+      // Kota's visual pivot is rotated 180 degrees, so the movement root must
+      // include the same offset. This keeps the animated body facing its travel vector.
+      const targetYaw=Math.atan2(d.x,d.z)+Math.PI;
       player.rotation.y=BABYLON.Scalar.LerpAngle(player.rotation.y,targetYaw,Math.min(1,dt*14));
       player.position.y=surfaceHeight(player.position.x,player.position.z);
     }
