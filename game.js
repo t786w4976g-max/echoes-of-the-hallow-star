@@ -212,9 +212,9 @@
       kotaArmature.parent = player;
       kotaArmature.position.set(0, 0, 0);
       kotaArmature.rotationQuaternion = null;
-      // Meshy export faces backward relative to Babylon's movement-forward axis.
-      // Rotate only the visual armature 180 degrees; PlayerRoot still controls movement and collision.
-      kotaArmature.rotation.set(0, Math.PI, 0);
+      // Keep the imported model's native forward axis. The controller movement
+      // and PlayerRoot yaw already define the travel direction.
+      kotaArmature.rotation.set(0, 0, 0);
 
       container.meshes.forEach(mesh => {
         if (mesh.getTotalVertices && mesh.getTotalVertices() > 0) {
