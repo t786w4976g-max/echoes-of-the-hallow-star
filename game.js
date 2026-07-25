@@ -175,8 +175,15 @@
   const player = new BABYLON.TransformNode('PlayerRoot', scene);
   player.position.set(0, surfaceHeight(0, 15), 15);
 
+  // Meshy faces the opposite local axis from Babylon's movement root.
+  // Keep the animated armature untouched and rotate a non-animated parent pivot.
+  // This rotation cannot be overwritten by the imported animation tracks.
+  const kotaVisualPivot = new BABYLON.TransformNode('KotaVisualPivot', scene);
+  kotaVisualPivot.parent = player;
+  kotaVisualPivot.rotation.y = Math.PI;
+
   // Imported character stays under its original Armature hierarchy.
-  // Only the Armature root is attached to PlayerRoot.
+  // The Armature is attached beneath the persistent visual pivot.
   let kotaReady = false;
   let currentAnim = '';
   let kotaArmature = null;
@@ -209,12 +216,9 @@
       }
 
       // Preserve Meshy scale and complete skeleton hierarchy.
-      kotaArmature.parent = player;
+      // Do not rotate the Armature itself: its animation tracks can overwrite that.
+      kotaArmature.parent = kotaVisualPivot;
       kotaArmature.position.set(0, 0, 0);
-      kotaArmature.rotationQuaternion = null;
-      // Keep the imported model's native forward axis. The controller movement
-      // and PlayerRoot yaw already define the travel direction.
-      kotaArmature.rotation.set(0, 0, 0);
 
       container.meshes.forEach(mesh => {
         if (mesh.getTotalVertices && mesh.getTotalVertices() > 0) {
@@ -343,7 +347,16 @@
     if(pad){if(!padShown){$("controller-status").classList.add('show');padShown=true}if(Math.abs(pad.axes[0])>.15||Math.abs(pad.axes[1])>.15){moveX=pad.axes[0];moveY=pad.axes[1]}else if(!sid){moveX=moveY=0}if(Math.abs(pad.axes[2])>.18)camera.alpha+=pad.axes[2]*.045;if(Math.abs(pad.axes[3])>.18)camera.beta=BABYLON.Scalar.Clamp(camera.beta+pad.axes[3]*.028,camera.lowerBetaLimit,camera.upperBetaLimit);const a=pad.buttons[0]?.pressed,b=pad.buttons[1]?.pressed;if(a&&!lastA)punch();if(b&&!lastB)roll();lastA=a;lastB=b}
     if(!gameStarted||dialogueOpen)return;
     let x=moveX+(input.keys.d?1:0)-(input.keys.a?1:0),y=moveY+(input.keys.s?1:0)-(input.keys.w?1:0),l=Math.hypot(x,y);if(l>1){x/=l;y/=l}
-    if(l>.08){const f=camera.getForwardRay().direction;f.y=0;f.normalize();const r=BABYLON.Vector3.Cross(BABYLON.Axis.Y,f).normalize();const d=r.scale(x).add(f.scale(-y)).normalize(),sp=rolling?8.8:4.6;player.position.addInPlace(d.scale(sp*dt));const targetYaw=Math.atan2(d.x,d.z);player.rotation.y=BABYLON.Scalar.LerpAngle(player.rotation.y,targetYaw,Math.min(1,dt*14));player.position.y=surfaceHeight(player.position.x,player.position.z)}
+    if(l>.08){
+      // Explicit camera-relative movement: stick-up always means away from the camera.
+      const f=camera.target.subtract(camera.position);f.y=0;f.normalize();
+      const r=BABYLON.Vector3.Cross(BABYLON.Axis.Y,f).normalize();
+      const d=r.scale(x).add(f.scale(-y)).normalize(),sp=rolling?8.8:4.6;
+      player.position.addInPlace(d.scale(sp*dt));
+      const targetYaw=Math.atan2(d.x,d.z);
+      player.rotation.y=BABYLON.Scalar.LerpAngle(player.rotation.y,targetYaw,Math.min(1,dt*14));
+      player.position.y=surfaceHeight(player.position.x,player.position.z);
+    }
     updateLocomotionAnimation(l);
     player.position.x=BABYLON.Scalar.Clamp(player.position.x,-58,58);player.position.z=BABYLON.Scalar.Clamp(player.position.z,-58,58);camera.target=BABYLON.Vector3.Lerp(camera.target,player.position.add(new BABYLON.Vector3(0,1.35,0)),.12);
     const target=objective(),d=target.subtract(player.position),dist=Math.round(Math.hypot(d.x,d.z));$("objective-distance").textContent=dist+' m';document.querySelector('#objective-marker .arrow').style.transform=`rotate(${Math.atan2(d.x,d.z)-camera.alpha-Math.PI/2}rad)`;
