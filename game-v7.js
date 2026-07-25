@@ -169,7 +169,7 @@
   const kotaAnims={};
   const beginButton=$('begin');
   beginButton.disabled=true;beginButton.textContent='Loading Kota…';
-  BABYLON.SceneLoader.ImportMeshAsync('', './', 'Kota_Mobile_Merged.glb?v=7', scene, null, '.glb').then(result=>{
+  BABYLON.SceneLoader.ImportMeshAsync('', './', 'Kota_Mobile_Merged.glb', scene).then(result=>{
     // Keep the imported armature, skin, and mesh hierarchy intact.
     // Re-parent only top-level imported roots to the moving player visual root.
     const allImported = new Set([
@@ -218,11 +218,12 @@
       transformNodes: result.transformNodes.length,
       animations: Object.keys(kotaAnims)
     });
+    toast(`Kota loaded: ${result.meshes.length} meshes, anims: ${Object.keys(kotaAnims).join(',')||'none'}`);
   }).catch(err=>{
     console.error('Kota GLB failed to load', err);
     beginButton.disabled = false;
     beginButton.textContent = 'Model load failed';
-    toast('Kota model failed to load');
+    toast('Kota load failed: '+(err && err.message ? err.message : String(err)));
   });
   function playKotaAnimation(name,loop=true,speed=1){
     if(!kotaReady)return;
